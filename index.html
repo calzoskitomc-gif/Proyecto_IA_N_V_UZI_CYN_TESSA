@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>La casa de N y Uzi 🤖</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #0a0a12; font-family: system-ui, -apple-system, sans-serif; }
+  #canvas-container { position: fixed; inset: 0; }
+  #overlay { position: fixed; inset: 0; pointer-events: none; }
+
+  .panel {
+    position: absolute; bottom: 16px; width: 320px;
+    background: rgba(10, 10, 20, 0.75); backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 12px;
+    padding: 12px 14px; color: #eee; font-size: 13px; line-height: 1.4;
+  }
+  #panel-n   { left: 16px; border-color: rgba(120, 220, 255, 0.4); }
+  #panel-uzi { right: 16px; border-color: rgba(255, 90, 160, 0.4); }
+  .panel h2 { margin: 0 0 6px 0; font-size: 15px; }
+  .panel .accion { opacity: 0.7; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .panel .dialogo { margin-top: 6px; font-style: italic; min-height: 32px; }
+  .panel .barra-fondo { background: rgba(255,255,255,0.15); border-radius: 4px; height: 5px; margin-top: 3px; overflow: hidden; }
+  .panel .barra { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+
+  #titulo {
+    position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+    color: #eee; font-size: 13px; opacity: 0.6; letter-spacing: 0.08em;
+  }
+
+  .burbuja {
+    position: absolute; transform: translate(-50%, -100%);
+    background: rgba(255,255,255,0.95); color: #111;
+    padding: 6px 10px; border-radius: 10px; font-size: 12px;
+    max-width: 200px; text-align: center; pointer-events: none;
+    transition: opacity 0.3s ease; opacity: 0;
+  }
+
+  #estado-carga {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: #888; font-size: 13px; background: #0a0a12; z-index: 5;
+  }
+
+  #boton-diario {
+    position: absolute; top: 16px; right: 16px; pointer-events: auto;
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25);
+    color: #eee; border-radius: 8px; padding: 8px 12px; font-size: 12px; cursor: pointer;
+  }
+  #boton-diario:hover { background: rgba(255,255,255,0.2); }
+
+  #panel-diario {
+    position: absolute; top: 60px; right: 16px; width: min(420px, 90vw); max-height: 70vh;
+    background: rgba(10, 10, 20, 0.92); backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 12px;
+    padding: 14px; color: #ddd; font-size: 12px; line-height: 1.5;
+    overflow-y: auto; pointer-events: auto; display: none;
+  }
+  #panel-diario.abierto { display: block; }
+  #panel-diario h3 { margin: 14px 0 6px 0; font-size: 13px; color: #78dcff; }
+  #panel-diario h3.uzi { color: #ff5aa0; }
+  #panel-diario pre { white-space: pre-wrap; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px; font-size: 11px; }
+  #panel-diario .mensaje { padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  #panel-diario .tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+  #panel-diario .tab { flex: 1; text-align: center; padding: 6px; border-radius: 6px; background: rgba(255,255,255,0.08); cursor: pointer; }
+  #panel-diario .tab.activo { background: rgba(255,255,255,0.25); }
+</style>
+</head>
+<body>
+<div id="canvas-container"></div>
+<div id="overlay">
+  <div id="titulo">🎥 en vivo — la casa de N &amp; Uzi</div>
+
+  <div class="panel" id="panel-n">
+    <h2>N</h2>
+    <div class="accion" id="accion-n">quieta</div>
+    <div class="barra-fondo"><div class="barra" id="barra-n" style="width:50%; background:#78dcff;"></div></div>
+    <div class="dialogo" id="dialogo-n">…</div>
+  </div>
+
+  <div class="panel" id="panel-uzi">
+    <h2>Uzi</h2>
+    <div class="accion" id="accion-uzi">quieta</div>
+    <div class="barra-fondo"><div class="barra" id="barra-uzi" style="width:50%; background:#ff5aa0;"></div></div>
+    <div class="dialogo" id="dialogo-uzi">…</div>
+  </div>
+
+  <div class="burbuja" id="burbuja-n"></div>
+  <div class="burbuja" id="burbuja-uzi"></div>
+
+  <button id="boton-diario" onclick="togglePanelDiario()">📋 Diario y memoria</button>
+  <div id="panel-diario">
+    <div class="tabs">
+      <div class="tab activo" id="tab-experimentos" onclick="cambiarTab('experimentos')">🧪 Experimentos</div>
+      <div class="tab" id="tab-memoria" onclick="cambiarTab('memoria')">🧠 Memoria</div>
+    </div>
+    <div id="contenido-experimentos">
+      <h3>N</h3><pre id="diario-n">Cargando...</pre>
+      <h3 class="uzi">Uzi</h3><pre id="diario-uzi">Cargando...</pre>
+    </div>
+    <div id="contenido-memoria" style="display:none;">
+      <h3>N — eventos importantes</h3><div id="eventos-n">Cargando...</div>
+      <h3>N — últimos mensajes</h3><div id="mensajes-n">Cargando...</div>
+      <h3 class="uzi">Uzi — eventos importantes</h3><div id="eventos-uzi">Cargando...</div>
+      <h3 class="uzi">Uzi — últimos mensajes</h3><div id="mensajes-uzi">Cargando...</div>
+    </div>
+  </div>
+</div>
+<div id="estado-carga">Cargando el cuarto...</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/[email protected]/build/three.module.js",
+    "three/addons/": "https://unpkg.com/[email protected]/examples/jsm/"
+  }
+}
+</script>
+
+<script>
+// Panel de diario/memoria - aparte del módulo 3D para que abra rápido
+// aunque los modelos tarden en cargar. El visor 3D de abajo reutiliza
+// estas mismas URLs (no hace falta configurarlas dos veces).
+const BASE_N   = "https://TU-SERVICIO-N.onrender.com";
+const BASE_UZI = "https://TU-SERVICIO-UZI.onrender.com";
+
+let panelAbierto = false;
+let panelCargadoAlMenosUnaVez = false;
+
+function togglePanelDiario() {
+  panelAbierto = !panelAbierto;
+  document.getElementById("panel-diario").classList.toggle("abierto", panelAbierto);
+  if (panelAbierto && !panelCargadoAlMenosUnaVez) {
+    cargarDiario();
+    cargarMemoria();
+    panelCargadoAlMenosUnaVez = true;
+  }
+}
+
+function cambiarTab(nombre) {
+  document.getElementById("tab-experimentos").classList.toggle("activo", nombre === "experimentos");
+  document.getElementById("tab-memoria").classList.toggle("activo", nombre === "memoria");
+  document.getElementById("contenido-experimentos").style.display = nombre === "experimentos" ? "block" : "none";
+  document.getElementById("contenido-memoria").style.display = nombre === "memoria" ? "block" : "none";
+}
+
+async function cargarDiario() {
+  for (const [base, elId] of [[BASE_N, "diario-n"], [BASE_UZI, "diario-uzi"]]) {
+    try {
+      const resp = await fetch(`${base}/diario`, { cache: "no-store" });
+      const data = await resp.json();
+      document.getElementById(elId).textContent = data.diario || "(vacío)";
+    } catch (err) {
+      document.getElementById(elId).textContent = "No pude conectarme a este backend.";
+    }
+  }
+}
+
+async function cargarMemoria() {
+  for (const [base, sufijo] of [[BASE_N, "n"], [BASE_UZI, "uzi"]]) {
+    try {
+      const resp = await fetch(`${base}/memoria`, { cache: "no-store" });
+      const data = await resp.json();
+      document.getElementById(`eventos-${sufijo}`).textContent = data.eventos_importantes || "(sin eventos)";
+      const lista = (data.ultimos_mensajes || [])
+        .map((m) => `<div class="mensaje"><b>${m.role}:</b> ${m.content}</div>`)
+        .join("");
+      document.getElementById(`mensajes-${sufijo}`).innerHTML = lista || "(sin mensajes)";
+    } catch (err) {
+      document.getElementById(`eventos-${sufijo}`).textContent = "No pude conectarme a este backend.";
+    }
+  }
+}
+
+// Refresca el panel cada 15s mientras esté abierto
+setInterval(() => {
+  if (panelAbierto) { cargarDiario(); cargarMemoria(); }
+}, 15000);
+</script>
+
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+// ============================================================
+// CONFIGURA ESTO ANTES DE PUBLICAR LA PÁGINA
+// ============================================================
+// 1) Las URLs de tus dos servicios de Render se definen UNA sola vez,
+//    arriba del todo en el <script> del panel de diario (BASE_N / BASE_UZI)
+//    - aquí solo se les agrega "/estado_3d" para el visor en vivo.
+const BACKEND_N   = `${BASE_N}/estado_3d`;
+const BACKEND_UZI = `${BASE_UZI}/estado_3d`;
+
+// 2) Rutas a los modelos que bajes de Sketchfab (formato glTF/.glb).
+//    Revisa la licencia de cada modelo antes de usarlo (preferir CC0 o
+//    CC-BY, y dar crédito si la licencia lo pide).
+const RUTA_MAPA = "assets/map.glb";
+const RUTA_N     = "assets/n.glb";
+const RUTA_UZI   = "assets/uzi.glb";
+
+// 3) Puntos del cuarto a los que pueden "caminar". Edítalos según el
+//    tamaño/escala real de TU mapa (abre el mapa y ajusta a ojo).
+const PUNTOS = {
+  quieta:              new THREE.Vector3(0, 0, 0),
+  caminar_computadora: new THREE.Vector3(2.2, 0, -1.5),
+  caminar_sillon:      new THREE.Vector3(-2.5, 0, 0.5),
+  caminar_ventana:     new THREE.Vector3(0, 0, -3),
+  sentarse:            new THREE.Vector3(-2.5, 0, 0.5),
+  saludar:             new THREE.Vector3(0, 0, 0),
+  bailar:              new THREE.Vector3(0, 0, 1.5),
+  pensar:              new THREE.Vector3(1, 0, 1),
+};
+
+// Separación inicial entre ambos avatares para que no se encimen
+const OFFSET_N   = new THREE.Vector3(-0.4, 0, 0);
+const OFFSET_UZI = new THREE.Vector3(0.4, 0, 0);
+
+// ============================================================
+// ESCENA BÁSICA
+// ============================================================
+const contenedor = document.getElementById("canvas-container");
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a12);
+scene.fog = new THREE.Fog(0x0a0a12, 8, 25);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 100);
+camera.position.set(4, 3, 6);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+contenedor.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1, 0);
+controls.autoRotate = true;       // sensación de "cámara viva" cuando nadie interactúa
+controls.autoRotateSpeed = 0.4;
+controls.enableDamping = true;
+controls.addEventListener("start", () => (controls.autoRotate = false));
+
+scene.add(new THREE.HemisphereLight(0xbbccff, 0x222233, 1.1));
+const luzDirigida = new THREE.DirectionalLight(0xffffff, 1.2);
+luzDirigida.position.set(5, 8, 3);
+scene.add(luzDirigida);
+
+// Piso de respaldo por si el mapa no trae uno (se oculta si carga el mapa)
+const piso = new THREE.Mesh(
+  new THREE.PlaneGeometry(30, 30),
+  new THREE.MeshStandardMaterial({ color: 0x14141f })
+);
+piso.rotation.x = -Math.PI / 2;
+scene.add(piso);
+
+window.addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ============================================================
+// CARGA DE MODELOS
+// ============================================================
+const loader = new GLTFLoader();
+const reloj = new THREE.Clock();
+
+function cargarModelo(ruta) {
+  return new Promise((resolve, reject) => {
+    loader.load(ruta, (gltf) => resolve(gltf), undefined, (err) => reject(err));
+  });
+}
+
+class Avatar {
+  constructor(nombre, offsetBase, colorAcento) {
+    this.nombre = nombre;
+    this.offsetBase = offsetBase;
+    this.colorAcento = colorAcento;
+    this.grupo = new THREE.Group();
+    this.mixer = null;
+    this.clipsPorNombre = {};
+    this.destino = PUNTOS.quieta.clone().add(offsetBase);
+    this.grupo.position.copy(this.destino);
+    this.tieneModelo = false;
+    scene.add(this.grupo);
+  }
+
+  async cargar(ruta) {
+    try {
+      const gltf = await cargarModelo(ruta);
+      this.grupo.add(gltf.scene);
+      this.tieneModelo = true;
+
+      if (gltf.animations && gltf.animations.length) {
+        this.mixer = new THREE.AnimationMixer(gltf.scene);
+        for (const clip of gltf.animations) {
+          this.clipsPorNombre[clip.name.toLowerCase()] = clip;
+        }
+        this._reproducirClipQueContenga(["idle", "breath", "respir"]);
+      }
+    } catch (err) {
+      console.warn(`No pude cargar el modelo de ${this.nombre} (${ruta}). Poniendo un cubo de reemplazo.`, err);
+      const cubo = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.3, 0.8, 4, 8),
+        new THREE.MeshStandardMaterial({ color: this.colorAcento })
+      );
+      cubo.position.y = 0.7;
+      this.grupo.add(cubo);
+      this.placeholder = cubo;
+    }
+  }
+
+  _reproducirClipQueContenga(palabrasClave) {
+    if (!this.mixer) return false;
+    for (const [nombreClip, clip] of Object.entries(this.clipsPorNombre)) {
+      if (palabrasClave.some((p) => nombreClip.includes(p))) {
+        this.mixer.stopAllAction();
+        this.mixer.clipAction(clip).play();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  moverA(nombreAccion) {
+    const base = PUNTOS[nombreAccion] || PUNTOS.quieta;
+    this.destino = base.clone().add(this.offsetBase);
+
+    // Si el modelo trae animaciones con nombres reconocibles, úsalas
+    if (this.mixer) {
+      if (nombreAccion === "bailar") this._reproducirClipQueContenga(["dance", "bail"]);
+      else if (nombreAccion === "saludar") this._reproducirClipQueContenga(["wave", "salud", "hello"]);
+      else if (nombreAccion.startsWith("caminar")) this._reproducirClipQueContenga(["walk", "camin"]);
+      else if (nombreAccion === "sentarse") this._reproducirClipQueContenga(["sit", "sent"]);
+      else this._reproducirClipQueContenga(["idle", "breath", "respir"]);
+    }
+  }
+
+  actualizar(delta, tiempoTotal) {
+    // Camina suave hacia el destino
+    this.grupo.position.lerp(this.destino, Math.min(1, delta * 2));
+
+    if (this.mixer) {
+      this.mixer.update(delta);
+    } else if (this.placeholder) {
+      // Sin animaciones en el modelo: truco simple de "respirar" con escala
+      const respirar = 1 + Math.sin(tiempoTotal * 1.6) * 0.02;
+      this.placeholder.scale.set(1, respirar, 1);
+    }
+  }
+
+  posicionEnPantalla() {
+    const posMundo = this.grupo.position.clone();
+    posMundo.y += 1.9; // altura sobre la "cabeza"
+    const proyectado = posMundo.project(camera);
+    return {
+      x: (proyectado.x * 0.5 + 0.5) * innerWidth,
+      y: (-proyectado.y * 0.5 + 0.5) * innerHeight,
+      visible: proyectado.z < 1,
+    };
+  }
+}
+
+const avatarN = new Avatar("N", OFFSET_N, 0x78dcff);
+const avatarUzi = new Avatar("Uzi", OFFSET_UZI, 0xff5aa0);
+
+async function iniciar() {
+  const tareas = [avatarN.cargar(RUTA_N), avatarUzi.cargar(RUTA_UZI)];
+
+  loader.load(
+    RUTA_MAPA,
+    (gltf) => { scene.add(gltf.scene); piso.visible = false; },
+    undefined,
+    (err) => console.warn("No pude cargar el mapa - se usa el piso de respaldo.", err)
+  );
+
+  await Promise.all(tareas);
+  document.getElementById("estado-carga").style.display = "none";
+  animar();
+}
+
+// ============================================================
+// LOOP DE RENDER
+// ============================================================
+function animar() {
+  requestAnimationFrame(animar);
+  const delta = reloj.getDelta();
+  const tiempoTotal = reloj.getElapsedTime();
+
+  avatarN.actualizar(delta, tiempoTotal);
+  avatarUzi.actualizar(delta, tiempoTotal);
+  controls.update();
+  renderer.render(scene, camera);
+
+  posicionarBurbuja("burbuja-n", avatarN);
+  posicionarBurbuja("burbuja-uzi", avatarUzi);
+}
+
+function posicionarBurbuja(id, avatar) {
+  const el = document.getElementById(id);
+  const pos = avatar.posicionEnPantalla();
+  if (!pos.visible || !el.dataset.activa) {
+    el.style.opacity = "0";
+    return;
+  }
+  el.style.left = `${pos.x}px`;
+  el.style.top = `${pos.y}px`;
+}
+
+// ============================================================
+// LECTURA EN VIVO DEL BACKEND (Render)
+// ============================================================
+const EMOJIS_ACCION = {
+  quieta: "😐", caminar_computadora: "🖥️", caminar_sillon: "🛋️",
+  caminar_ventana: "🪟", sentarse: "🪑", saludar: "👋", bailar: "💃", pensar: "🤔",
+};
+
+function humorAColor(emocion) {
+  // Barra simple: promedio de confianza + apego + curiosidad + energía,
+  // restando miedo/agresividad. Ajusta esto si quieres otra lectura.
+  const positivo = (emocion.confianza + emocion.apego + emocion.curiosidad + emocion.energia) / 4;
+  const negativo = (emocion.miedo + emocion.agresividad) / 2;
+  const nivel = Math.max(0, Math.min(100, 50 + (positivo - negativo) * 5));
+  return nivel;
+}
+
+async function actualizarDesdeBackend(url, avatar, prefijo) {
+  try {
+    const resp = await fetch(url, { cache: "no-store" });
+    if (!resp.ok) throw new Error(resp.status);
+    const data = await resp.json();
+
+    document.getElementById(`accion-${prefijo}`).textContent =
+      `${EMOJIS_ACCION[data.accion_cuerpo] || "•"} ${data.accion_cuerpo} — ${data.emocion_texto || ""}`;
+
+    const barra = document.getElementById(`barra-${prefijo}`);
+    barra.style.width = `${humorAColor(data.emocion)}%`;
+
+    const dialogoEl = document.getElementById(`dialogo-${prefijo}`);
+    if (data.ultimo_dialogo) dialogoEl.textContent = `"${data.ultimo_dialogo}"`;
+
+    const burbuja = document.getElementById(`burbuja-${prefijo}`);
+    if (data.ultimo_dialogo) {
+      burbuja.textContent = data.ultimo_dialogo;
+      burbuja.dataset.activa = "1";
+      burbuja.style.opacity = "1";
+      clearTimeout(burbuja._timeout);
+      burbuja._timeout = setTimeout(() => { burbuja.style.opacity = "0"; }, 6000);
+    }
+
+    avatar.moverA(data.accion_cuerpo);
+  } catch (err) {
+    document.getElementById(`accion-${prefijo}`).textContent = "🔌 sin conexión con el backend";
+  }
+}
+
+function iniciarPolling() {
+  setInterval(() => actualizarDesdeBackend(BACKEND_N, avatarN, "n"), 2500);
+  setInterval(() => actualizarDesdeBackend(BACKEND_UZI, avatarUzi, "uzi"), 2500);
+}
+
+iniciar();
+iniciarPolling();
+</script>
+</body>
+</html>
